@@ -1,0 +1,324 @@
+from Table import Table
+
+x = Table()
+x.add_player("ori")
+x.add_player("amitay")
+x.add_player("yakir")
+x.start_game()
+
+from Deck import Deck
+from abc import ABC, abstractmethod
+from EnumClasses.enums import *
+from Players import *
+
+class Table:
+    def __init__(self):
+        self.deck = Deck() #מכין חבילת קלפים
+        self.deck.shuffle() # מערבב אותה
+        self.pot = 0 # סכום בקופה
+        self.money_each_one_need_to_pay_on_this_round = 0
+        self.round = Round.preFlop
+        self.cardPot = [] #הקלפים שעל השולחן
+        self.players = []
+        self.game_over = False
+        self.game_functions = [self.PreFlop, self.Flop, self.Turn, self.River]
+
+    def start_game(self):
+        self.deal_cards()
+
+        for player in self.players:
+            print(f"{player.name} has {player.hand.cards_in_string()} cards")
+
+        print("")
+        for func in self.game_functions:
+            if not self.game_over:
+                func()
+            else:
+                break
+
+
+
+
+
+
+    def PreFlop(self):
+        self.money_each_one_need_to_pay_on_this_round = 0
+        if self.round == Round.preFlop:
+            self.going_through_players()
+            self.round = Round.flop
+
+    def going_through_players(self):
+        for player in self.players:
+            player.action()
+        self.players = [player for player in self.players if player.still_playing]
+        for player in self.players:
+            player.new_round()
+
+
+    def Flop(self):
+        self.money_each_one_need_to_pay_on_this_round = 0
+        if self.round == Round.flop:
+            self.draw_flop()
+            self.going_through_players()
+            self.round = Round.turn
+    def Turn(self):
+        self.money_each_one_need_to_pay_on_this_round = 0
+        if self.round == Round.turn:
+            self.draw_turn_or_river()
+            self.going_through_players()
+            self.round = Round.river
+
+    def River(self):
+        self.money_each_one_need_to_pay_on_this_round = 0
+        if self.round == Round.river:
+            self.draw_turn_or_river()
+            self.going_through_players()
+
+
+    def add_player(self, name):
+        self.players.append(RandomPlayer(name, self))
+
+
+
+    def deal_cards(self):
+        for player in self.players:
+            player.set_cards([self.deck.draw_card(), self.deck.draw_card()])
+
+    def draw_flop(self):
+        self.deck.draw_card() #שעיר לעזעזל
+        for i in range(3):
+            self.cardPot.append(self.deck.draw_card())
+
+        print(self.cardPot)
+
+    def draw_turn_or_river(self):
+        self.deck.draw_card()
+        self.cardPot.append(self.deck.draw_card())
+
+        print(self.cardPot)
+
+    def checks_if_someone_won(self):
+        players_in_game = [player for player in self.players if player.still_playing]
+        if len(players_in_game) == 1:
+            print(players_in_game[0].name + " WON!")
+            self.game_over = True
+            self.deal_money(players_in_game)
+
+        # צריך גם לבדוק את הקלפים של השחקן ביחס לקלפים בשולחן
+
+    def deal_money(self, players_in_game):
+        for player in players_in_game:
+            if len(players_in_game) == 1:
+                player.hand.add_money(self.pot)
+                print(self.pot)
+                print(f"{player.name} has {player.hand.money}")
+
+
+
+    def add_to_pot(self, value):
+        self.pot += value
+
+    def is_every_one_who_plays_paid(self):
+        for player in self.players:
+            if player.still_playing:
+                if player.money_paid_on_this_round == self.money_each_one_need_to_pay_on_this_round:
+                    return True
+                else:
+                    return False
+                    # אמור להציע להם רק CALL ,BET או FOLD
+
+
+
+
+
+import random
+from abc import ABC, abstractmethod
+
+class Deck:
+
+    def __init__(self):
+        """יוצר חפיסה סטנדרטית של 52 קלפים"""
+        suits = ['Hearts', 'Diamonds', 'Clubs', 'Spades']
+        ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'Jack', 'Queen', 'King', 'Ace']
+        self.cards = [f"{rank} of {suit}" for suit in suits for rank in ranks]
+
+
+    def shuffle(self):
+        """מערבבת את הקלפים"""
+        #print(self.cards)
+        random.shuffle(self.cards)
+
+    def draw_card(self):
+        """שולפת קלף בודד מהחפיסה"""
+        if self.cards:
+            return self.cards.pop()
+        else:
+            return "No cards left in the deck"
+
+from enum import Enum
+
+
+class PotEquity(Enum):
+    half = 0.5
+    third = 1 / 3
+    threeQuarters = 3 / 4
+    one_and_half_pot = 1.5
+
+
+class Round(Enum):
+    preFlop = 0
+    flop = 1
+    turn = 2
+    river = 3
+class Card:
+    def __init__(self, suit, value):
+        self.value = value
+        self.suit = suit
+    card_ranks = {
+        '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, 'T': 10, 'J': 11,
+        'Q': 12, 'K': 13, 'A': 14
+    }
+
+    def valueToNumber(self, card_value):
+        return self.card_ranks[card_value]
+
+    def is_stronger(self, card1, card2):
+        return self.valueToNumber(card1.value) > self.valueToNumber(card2.value)
+
+    def is_stronger_in_tuple(self,tuple1,tuple2):
+        return self.is_stronger(Card(tuple1[0],tuple1[1]),Card(tuple2[0],tuple2[1]))
+
+class Hand:
+    def __init__(self, money, cards):
+        self.money = money
+        self.cards = cards
+    def remove_money(self, amount):
+        self.money -= amount
+
+    def add_money(self, amount):
+        self.money += amount
+
+    def cards_in_string(self):
+        return f"{self.cards[0]} and {self.cards[1]}"
+
+from abc import ABC, abstractmethod
+from EnumClasses.enums import *
+
+
+class Action(ABC):
+    @abstractmethod
+    def __init__(self, player):
+       # self.player = player
+        pass
+
+
+
+class Call(Action):
+    def __init__(self, table, player):
+        player.hand.remove_money(table.money_each_one_need_to_pay_on_this_round - player.money_paid_on_this_round)
+        player.money_paid_on_this_round = table.money_each_one_need_to_pay_on_this_round
+        table.pot += table.money_each_one_need_to_pay_on_this_round - player.money_paid_on_this_round
+
+
+
+class Bet(Action):
+    def __init__(self, bet, table, player):
+        '''        super().__init__(player)
+                pot = table.pot
+                self.pot = pot
+                #if pot*PotEquity.half == price or pot*PotEquity.third == price or pot*PotEquity.threeQuarters == price or price == pot or pot * PotEquity.one_and_half_pot == price:
+                player.hand.remove_money(price)
+                self.price = price
+                table.pot += price
+                table.lastBet = price'''
+        # זה דואג שהוא משלם את מה שהוא חייב בכל מקרה ואז לאחר מכן נותן לו לעשות BET
+        if player.money_paid_on_this_round < table.money_each_one_need_to_pay_on_this_round:
+            Call(table, player)
+        player.hand.remove_money(bet) # מסיר את הכסף מהחשבון של השחקן
+
+        table.pot += bet # מוסיף את הכסף לקופה
+        table.money_each_one_need_to_pay_on_this_round += bet #מגדיר כמה כסף צריך להשים על מנת להמשיך לשחק
+        player.money_paid_on_this_round += bet # מעדכן כמה השחקן שם כסף בסיבוב הזה(פרפלופ, פלופ וכדו...)
+
+
+
+
+class Check(Action):
+    def __init__(self, table):
+        pass
+
+
+class Fold(Action):
+    def __init__(self, table, player):
+        player.still_playing = False
+        table.checks_if_someone_won()
+
+from abc import ABC, abstractmethod
+import random
+from Actions import *
+from Hand import Hand
+
+
+class Player(ABC):
+    def __init__(self, name, table):
+        self.name = name
+        self.table = table
+    @abstractmethod
+    def action(self):
+        pass
+
+
+class RandomPlayer(Player):
+
+    def __init__(self, name, table):
+        super().__init__(name, table)
+        self.actions = ['call', 'bet', 'fold', 'check']
+        self.hand = None
+        self.bet_of_player = 30
+        self.money_paid_on_this_round = 0
+        self.over_all_money_paid = 0 # כמה כסף שם מתחילת המשחק
+        self.still_playing = True
+
+    def set_cards(self, cards):
+        self.hand = Hand(200, cards)
+
+    def action(self):
+        '''        print(self.money_paid_on_this_round)
+        print(self.table.money_each_one_need_to_pay_on_this_round)'''
+        print(f"{self.name} has {self.hand.money}")
+        if self.money_paid_on_this_round == self.table.money_each_one_need_to_pay_on_this_round and self.still_playing:
+            action = self.actions[random.randint(1, len(self.actions) - 1)]
+            print(f"{self.name} does {action}")
+            if action == 'bet':
+                self.bet_of_player = 20
+                Bet(self.bet_of_player, self.table, self)
+                self.table.bet = self.bet_of_player
+            elif action == 'check':
+                Check(self.table)
+            elif action == 'fold':
+                Fold(self.table, self)
+        while self.money_paid_on_this_round < self.table.money_each_one_need_to_pay_on_this_round and self.still_playing:
+            action = self.actions[random.randint(0, len(self.actions) - 2)]
+            print(f"{self.name} does {action}")
+
+            if action == 'call':
+                Call(self.table, self)
+            elif action == 'bet':
+                self.bet_of_player = 20
+                Bet(self.bet_of_player, self.table, self)
+                self.table.bet = self.bet_of_player
+            elif action == 'fold':
+                Fold(self.table, self)
+            if action != 'fold':
+                print(f"{self.name} has {self.hand.money}")
+
+    def new_round(self):
+        self.money_paid_on_this_round = 0
+
+
+
+
+
+
+
+
